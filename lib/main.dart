@@ -1,109 +1,189 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_movie_gallery/model/model.dart';
+import 'package:rxdart/rxdart.dart';
+import 'package:http/http.dart' as http;
 
-void main() => runApp(new MyApp());
+import 'dart:convert';
+
+const key = '3332ce65712d0011fa1d3bd54ba65b6f';
+
+void main() => runApp(MyApp());
 
 class MyApp extends StatelessWidget {
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return new MaterialApp(
-      title: 'Flutter Demo',
-      theme: new ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or press Run > Flutter Hot Reload in IntelliJ). Notice that the
-        // counter didn't reset back to zero; the application is not restarted.
-        primarySwatch: Colors.blue,
-      ),
-      home: new MyHomePage(title: 'Flutter Demo Home Page'),
+    return MaterialApp(
+      title: "Movie Searcher",
+      theme: ThemeData.dark(),
+      home: HomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
+class HomePage extends StatefulWidget {
   @override
-  _MyHomePageState createState() => new _MyHomePageState();
+  HomeState createState() => HomeState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class HomeState extends State<HomePage> {
+  List<Movie> movies = List();
+  bool hasLoaded = true;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  final PublishSubject subject = PublishSubject<String>();
+
+  @override
+  void dispose() {
+    subject.close();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    subject.stream.debounce(Duration(milliseconds: 400)).listen(searchMovies);
+  }
+
+  void searchMovies(query) {
+    resetMovies();
+    if (query.isEmpty) {
+      setState(() {
+        hasLoaded = true;
+      });
+      return; //Forgot to add in the tutorial <- leaves function if there is no query in the box.
+    }
+    setState(() => hasLoaded = false);
+    http
+        .get(
+            'https://api.themoviedb.org/3/search/movie?api_key=$key&query=$query')
+        .then((res) => (res.body))
+        .then(json.decode)
+        .then((map) => map["results"])
+        .then((movies) => movies.forEach(addMovie))
+        .catchError(onError)
+        .then((e) {
+      setState(() {
+        hasLoaded = true;
+      });
     });
+  }
+
+  void onError(dynamic d) {
+    setState(() {
+      hasLoaded = true;
+    });
+  }
+
+  void addMovie(item) {
+    setState(() {
+      movies.add(Movie.fromJson(item));
+    });
+    print('${movies.map((m) => m.title)}');
+  }
+
+  void resetMovies() {
+    setState(() => movies.clear());
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return new Scaffold(
-      appBar: new AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: new Text(widget.title),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Movie Searcher'),
       ),
-      body: new Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: new Column(
-          // Column is also layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug paint" (press "p" in the console where you ran
-          // "flutter run", or select "Toggle Debug Paint" from the Flutter tool
-          // window in IntelliJ) to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
+      body: Container(
+        padding: EdgeInsets.all(10.0),
+        child: Column(
           children: <Widget>[
-            new Text(
-              'You have pushed the button this many times:',
+            TextField(
+              onChanged: (String string) => (subject.add(string)),
             ),
-            new Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.display1,
+            hasLoaded ? Container() : CircularProgressIndicator(),
+            Expanded(
+              child: ListView.builder(
+                padding: EdgeInsets.all(10.0),
+                itemCount: movies.length,
+                itemBuilder: (BuildContext context, int index) {
+                  return new MovieView(movies[index]);
+                },
+              ),
             ),
           ],
         ),
       ),
-      floatingActionButton: new FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: new Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+    );
+  }
+}
+
+class MovieView extends StatefulWidget {
+  MovieView(this.movie);
+
+  final Movie movie;
+
+  @override
+  MovieViewState createState() => MovieViewState();
+}
+
+class MovieViewState extends State<MovieView> {
+  Movie movieState;
+
+  @override
+  void initState() {
+    super.initState();
+    movieState = widget.movie;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Container(
+        height: 200.0,
+        padding: EdgeInsets.all(10.0),
+        child: Row(
+          children: <Widget>[
+            movieState.posterPath != null
+                ? Hero(
+                    child: Image.network(
+                        "https://image.tmdb.org/t/p/w92${movieState.posterPath}"),
+                    tag: movieState.id,
+                  )
+                : Container(),
+            Expanded(
+              child: Stack(
+                children: <Widget>[
+                  Align(
+                    alignment: Alignment.center,
+                    child: Padding(
+                      padding: EdgeInsets.all(10.0),
+                      child: Text(
+                        movieState.title,
+                        maxLines: 10,
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: IconButton(
+                      icon: movieState.favored
+                          ? Icon(Icons.star)
+                          : Icon(Icons.star_border),
+                      color: Colors.white,
+                      onPressed: () {},
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: IconButton(
+                      icon: Icon(Icons.arrow_downward),
+                      color: Colors.white,
+                      onPressed: () {},
+                    ),
+                  )
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
