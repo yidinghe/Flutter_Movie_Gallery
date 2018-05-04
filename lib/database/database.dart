@@ -32,8 +32,22 @@ class MovieDatabase {
 
   void _onCreate(Database db, int version) async {
     await db.execute(
-        "CREATE TABLE Movies(id STRING PRIMARY KEY,title TEXT, poster_path TEXT, overview TEXT, favored BIT)");
+        "CREATE TABLE Movies(id STRING PRIMARY KEY, title TEXT, poster_path TEXT, overview TEXT, favored BIT)");
+
     print("Database was Created!");
+  }
+
+  Future<List<Movie>> getMovies() async {
+    var dbClient = await db;
+    List<Map> res = await dbClient.query("Movies");
+    return res.map((m) => Movie.fromDb(m)).toList();
+  }
+
+  Future<Movie> getMovie(String id) async {
+    var dbClient = await db;
+    var res = await dbClient.query("Movies", where: "id = ?", whereArgs: [id]);
+    if (res.length == 0) return null;
+    return Movie.fromDb(res[0]);
   }
 
   Future<int> addMovie(Movie movie) async {
