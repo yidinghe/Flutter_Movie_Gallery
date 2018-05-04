@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_movie_gallery/database/database.dart';
 import 'package:flutter_movie_gallery/model/model.dart';
+import 'package:flutter_movie_gallery/screens/movieView.dart';
+
 import 'package:rxdart/rxdart.dart';
 import 'package:http/http.dart' as http;
 
@@ -28,18 +31,22 @@ class HomePage extends StatefulWidget {
 class HomeState extends State<HomePage> {
   List<Movie> movies = List();
   bool hasLoaded = true;
+  MovieDatabase db;
 
   final PublishSubject subject = PublishSubject<String>();
 
   @override
   void dispose() {
     subject.close();
+    db.closeDb();
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    db = MovieDatabase();
+    db.initDB();
     subject.stream.debounce(Duration(milliseconds: 400)).listen(searchMovies);
   }
 
@@ -49,7 +56,7 @@ class HomeState extends State<HomePage> {
       setState(() {
         hasLoaded = true;
       });
-      return; //Forgot to add in the tutorial <- leaves function if there is no query in the box.
+      return;
     }
     setState(() => hasLoaded = false);
     http
@@ -99,88 +106,13 @@ class HomeState extends State<HomePage> {
             ),
             hasLoaded ? Container() : CircularProgressIndicator(),
             Expanded(
-              child: ListView.builder(
-                padding: EdgeInsets.all(10.0),
-                itemCount: movies.length,
-                itemBuilder: (BuildContext context, int index) {
-                  return new MovieView(movies[index]);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class MovieView extends StatefulWidget {
-  MovieView(this.movie);
-
-  final Movie movie;
-
-  @override
-  MovieViewState createState() => MovieViewState();
-}
-
-class MovieViewState extends State<MovieView> {
-  Movie movieState;
-
-  @override
-  void initState() {
-    super.initState();
-    movieState = widget.movie;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Container(
-        height: 200.0,
-        padding: EdgeInsets.all(10.0),
-        child: Row(
-          children: <Widget>[
-            movieState.posterPath != null
-                ? Hero(
-                    child: Image.network(
-                        "https://image.tmdb.org/t/p/w92${movieState.posterPath}"),
-                    tag: movieState.id,
-                  )
-                : Container(),
-            Expanded(
-              child: Stack(
-                children: <Widget>[
-                  Align(
-                    alignment: Alignment.center,
-                    child: Padding(
-                      padding: EdgeInsets.all(10.0),
-                      child: Text(
-                        movieState.title,
-                        maxLines: 10,
-                      ),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: IconButton(
-                      icon: movieState.favored
-                          ? Icon(Icons.star)
-                          : Icon(Icons.star_border),
-                      color: Colors.white,
-                      onPressed: () {},
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: IconButton(
-                      icon: Icon(Icons.arrow_downward),
-                      color: Colors.white,
-                      onPressed: () {},
-                    ),
-                  )
-                ],
-              ),
-            ),
+                child: ListView.builder(
+              padding: EdgeInsets.all(10.0),
+              itemCount: movies.length,
+              itemBuilder: (BuildContext context, int index) {
+                return new MovieView(movies[index], db);
+              },
+            ))
           ],
         ),
       ),
